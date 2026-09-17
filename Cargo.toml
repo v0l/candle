@@ -55,7 +55,13 @@ cudarc = { version = "0.19.8", features = [
     "f16",
     "f8",
     "cuda-version-from-build-system",
-    "dynamic-linking",
+    # Fork: load the CUDA libraries at run time rather than naming them in the
+    # binary's import table. With `dynamic-linking` the loader resolves
+    # libcublas and friends before main runs, so a build with CUDA in it does
+    # not start on a machine with no NVIDIA runtime; loading them instead lets
+    # one build serve every machine and report no CUDA device where there is
+    # none.
+    "fallback-dynamic-loading",
 ], default-features = false }
 cutile = "=0.3.1"
 fancy-regex = "0.19.0"
