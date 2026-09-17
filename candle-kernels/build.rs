@@ -4,6 +4,32 @@ use std::path::PathBuf;
 
 const CUTILE_FEATURE: &str = "CARGO_FEATURE_CUTILE";
 
+/// Where the static CUDA runtime lives, which the dynamic one did not need
+/// because the linker found it through the toolkit's own search path.
+fn cuda_lib_dirs() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = ["CUDA_HOME", "CUDA_PATH", "CUDA_ROOT", "CUDA_TOOLKIT_ROOT_DIR"]
+        .iter()
+        .filter_map(|v| env::var(v).ok())
+        .map(PathBuf::from)
+        .collect();
+    if let Ok(path) = env::var("PATH") {
+        for dir in env::split_paths(&path) {
+            let nvcc = dir.join(if cfg!(windows) { "nvcc.exe" } else { "nvcc" });
+            if nvcc.exists() {
+                if let Some(root) = dir.parent() {
+                    roots.push(root.to_path_buf());
+                }
+            }
+        }
+    }
+    roots.push(PathBuf::from("/usr/local/cuda"));
+    roots
+        .iter()
+        .flat_map(|r| [r.join("lib64"), r.join("lib"), r.join("lib").join("x64")])
+        .filter(|d| d.is_dir())
+        .collect()
+}
+
 fn main() -> Result<()> {
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=src/compatibility.cuh");
@@ -80,6 +106,9 @@ fn main() -> Result<()> {
     // import table of every binary that carries them. The static one dlopens
     // the driver, so a machine without one loads the binary and is told it
     // has no device.
+    for dir in cuda_lib_dirs() {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+    }
     println!("cargo:rustc-link-lib=static=cudart_static");
     if !is_target_msvc {
         println!("cargo:rustc-link-lib=stdc++");
